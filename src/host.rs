@@ -1,6 +1,6 @@
 use core::{fmt::Debug, mem::zeroed, time::Duration};
 
-use crate::{Box, Vec};
+use crate::{enet_time_get, Box, Vec};
 
 use crate::{
     consts::{
@@ -423,6 +423,11 @@ impl<S: Socket> Host<S> {
     #[must_use]
     pub fn now(&self) -> Duration {
         unsafe { (*self.host).time.assume_init_ref()() }
+    }
+
+    /// Get the raw time according to this host
+    pub fn enet_time_get(&self) -> u32 {
+        unsafe { enet_time_get(self.host) }
     }
 
     fn create_event<'a>(&'a mut self, event: &ENetEvent<S>) -> Event<'a, S> {

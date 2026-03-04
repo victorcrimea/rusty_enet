@@ -55,6 +55,12 @@ impl<S: Socket> Peer<S> {
         PeerID(unsafe { self.0.offset_from((*(*self.0).host).peers) as usize })
     }
 
+    /// Time when last message was received from peer
+    pub fn last_receive_time(&self) -> u32 {
+        let peer = unsafe { &(*self.0) };
+        peer.last_receive_time
+    }
+
     /// Sends a ping request to a peer.
     ///
     /// Ping requests factor into the mean round trip time as acquired by
