@@ -430,6 +430,18 @@ impl<S: Socket> Host<S> {
         unsafe { enet_time_get(self.host) }
     }
 
+    /// Total bytes received by this host since it was created. Wraps at `u32::MAX`.
+    #[must_use]
+    pub fn total_received_data(&self) -> u32 {
+        unsafe { (*self.host).total_received_data }
+    }
+
+    /// Total bytes sent by this host since it was created. Wraps at `u32::MAX`.
+    #[must_use]
+    pub fn total_sent_data(&self) -> u32 {
+        unsafe { (*self.host).total_sent_data }
+    }
+
     fn create_event<'a>(&'a mut self, event: &ENetEvent<S>) -> Event<'a, S> {
         match event.type_0 {
             ENET_EVENT_TYPE_CONNECT => Event::Connect {
