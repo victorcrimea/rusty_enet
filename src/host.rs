@@ -4,6 +4,7 @@ use crate::{enet_time_get, Box, Vec};
 
 use crate::{
     consts::{
+        HOST_DEFAULT_MAXIMUM_PACKET_SIZE, HOST_DEFAULT_MAXIMUM_WAITING_DATA,
         PROTOCOL_MAXIMUM_CHANNEL_COUNT, PROTOCOL_MAXIMUM_MTU, PROTOCOL_MAXIMUM_PEER_ID,
         PROTOCOL_MINIMUM_MTU,
     },
@@ -43,6 +44,11 @@ pub struct HostSettings {
     pub time: Box<dyn Fn() -> Duration>,
     /// Seed the host with a specific random seed, or set to [`None`] to use a random seed.
     pub seed: Option<u32>,
+    /// The largest packet, in bytes, the host will send or reassemble. Cannot be 0.
+    pub maximum_packet_size: usize,
+    /// The most data, in bytes, a single peer may hold in packets not yet received by the
+    /// application, fragments being reassembled included. Cannot be 0.
+    pub maximum_waiting_data: usize,
 }
 
 impl Default for HostSettings {
@@ -56,6 +62,8 @@ impl Default for HostSettings {
             checksum: None,
             time: Box::new(time_since_epoch),
             seed: None,
+            maximum_packet_size: HOST_DEFAULT_MAXIMUM_PACKET_SIZE as usize,
+            maximum_waiting_data: HOST_DEFAULT_MAXIMUM_WAITING_DATA as usize,
         }
     }
 }
@@ -112,6 +120,18 @@ impl<S: Socket> Host<S> {
                 parameter: "settings.peer_limit",
             }));
         }
+        if settings.maximum_packet_size == 0 {
+            return Err(HostNewError::BadParameter(BadParameter {
+                method: "Host::new",
+                parameter: "settings.maximum_packet_size",
+            }));
+        }
+        if settings.maximum_waiting_data == 0 {
+            return Err(HostNewError::BadParameter(BadParameter {
+                method: "Host::new",
+                parameter: "settings.maximum_waiting_data",
+            }));
+        }
         unsafe {
             let host = enet_host_create::<S>(
                 socket,
@@ -123,6 +143,8 @@ impl<S: Socket> Host<S> {
                 settings.seed,
             )
             .map_err(|err| HostNewError::FailedToInitializeSocket(err))?;
+            (*host).maximum_packet_size = settings.maximum_packet_size;
+            (*host).maximum_waiting_data = settings.maximum_waiting_data;
             let mut peers = Vec::new();
             peers.reserve_exact((*host).peer_count);
             for peer_index in 0..(*host).peer_count {
