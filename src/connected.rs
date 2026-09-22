@@ -476,6 +476,13 @@ impl<C: Connection> Peer<C> {
             .map_or(0, |peer| peer.outgoing_data_total())
     }
 
+    /// See [`Peer::outgoing_queue_bytes`](`crate::Peer::outgoing_queue_bytes`).
+    #[must_use]
+    pub fn outgoing_queue_bytes(&self) -> usize {
+        self.peer_or_last_peer()
+            .map_or(0, |peer| peer.outgoing_queue_bytes())
+    }
+
     /// See [`Peer::packets_sent`](`crate::Peer::packets_sent`).
     #[must_use]
     pub fn packets_sent(&self) -> u32 {

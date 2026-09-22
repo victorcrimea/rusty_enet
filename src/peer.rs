@@ -6,12 +6,26 @@ use crate::{
     enet_peer_ping_interval, enet_peer_reset, enet_peer_send, enet_peer_throttle_configure,
     enet_peer_timeout,
     error::{BadParameter, PeerSendError},
-    ENetPeer, Packet, Socket, ENET_PEER_STATE_ACKNOWLEDGING_CONNECT,
+    ENetList, ENetOutgoingCommand, ENetPeer, Packet, Socket, ENET_PEER_STATE_ACKNOWLEDGING_CONNECT,
     ENET_PEER_STATE_ACKNOWLEDGING_DISCONNECT, ENET_PEER_STATE_CONNECTED,
     ENET_PEER_STATE_CONNECTING, ENET_PEER_STATE_CONNECTION_PENDING,
     ENET_PEER_STATE_CONNECTION_SUCCEEDED, ENET_PEER_STATE_DISCONNECTED,
     ENET_PEER_STATE_DISCONNECTING, ENET_PEER_STATE_DISCONNECT_LATER, ENET_PEER_STATE_ZOMBIE,
 };
+
+// Read-only walk of the same three queues enet_peer_reset_outgoing_commands (c/peer.rs) frees on
+// disconnect, so this always matches what a reset would have released.
+unsafe fn queue_bytes(queue: &ENetList) -> usize {
+    let mut total = 0_usize;
+    let mut node = queue.sentinel.next;
+    let end = core::ptr::addr_of!(queue.sentinel).cast_mut();
+    while node != end {
+        let command: *const ENetOutgoingCommand = node.cast();
+        total += (*command).fragment_length as usize;
+        node = (*node).next;
+    }
+    total
+}
 
 /// A newtype around a `usize`, representing a unique identifier for a peer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -262,6 +276,23 @@ impl<S: Socket> Peer<S> {
     #[must_use]
     pub fn outgoing_data_total(&self) -> u32 {
         unsafe { (*self.0).outgoing_data_total }
+    }
+
+    /// Payload bytes currently queued for this peer and not yet acknowledged: commands
+    /// waiting to be sent, reliable commands already sent but unacknowledged, and reliable
+    /// commands waiting for window space.
+    ///
+    /// Unlike [`Peer::outgoing_data_total`], this is not reset by bandwidth throttling, so it
+    /// can be used to detect a peer whose queue is growing because it has stopped
+    /// acknowledging.
+    #[must_use]
+    pub fn outgoing_queue_bytes(&self) -> usize {
+        unsafe {
+            let peer = &(*self.0);
+            queue_bytes(&peer.outgoing_commands)
+                + queue_bytes(&peer.outgoing_send_reliable_commands)
+                + queue_bytes(&peer.sent_reliable_commands)
+        }
     }
 
     /// Total number of packets sent.
